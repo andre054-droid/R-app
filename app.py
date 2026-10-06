@@ -803,7 +803,7 @@ def _ocr_images_gemini(images: list, api_key: str, max_images: int = 40) -> str:
     except ImportError:
         return "[Instale google-generativeai para OCR com Gemini]"
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-3.5-flash")
     parts = []
     prompt = (
         "És um assistente de auditoria de sustentabilidade vitivinícola. "
@@ -1089,7 +1089,7 @@ def _ask_gemini(question: str, api_key: str, system: str) -> str:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name="gemini-3.5-flash",
             system_instruction=system,
         )
         resp = model.generate_content(
@@ -1108,7 +1108,7 @@ def _llm_json_array(prompt: str, api_key: str, provider: str = None) -> list:
     if provider == "gemini":
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-3.5-flash")
         resp = model.generate_content(
             "Responde APENAS com um JSON array válido, sem markdown.\n\n" + prompt,
             generation_config={"temperature": 0.1, "max_output_tokens": 2500},
