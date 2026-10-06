@@ -576,7 +576,7 @@ def extract_text_from_bytes(name: str, data: bytes) -> str:
             from io import BytesIO
             reader = PdfReader(BytesIO(data))
             parts = []
-            for page in reader.pages[:50]:
+            for page in reader.pages[:200]:
                 try:
                     parts.append(page.extract_text() or "")
                 except Exception:
@@ -659,7 +659,7 @@ def extract_from_zip(zip_bytes: bytes) -> tuple:
                     data = zf.read(info)
                 except Exception:
                     continue
-                if len(data) > 25 * 1024 * 1024:  # 25 MB por ficheiro
+                if len(data) > 200 * 1024 * 1024:  # 200 MB por ficheiro dentro do ZIP
                     names.append(fname + " [ficheiro demasiado grande, ignorado]")
                     continue
                 names.append(fname)
@@ -670,12 +670,12 @@ def extract_from_zip(zip_bytes: bytes) -> tuple:
                 if chunk.strip():
                     texts.append(f"\n\n===== FICHEIRO: {fname} =====\n{chunk[:20000]}")
     combined = "\n".join(texts)
-    if len(combined) > 150000:
+    if len(combined) > 400000:
         combined = combined[:150000] + "\n\n[... texto truncado por tamanho ...]"
     return combined, names, images
 
 
-def ocr_images_with_groq(images: list, api_key: str, max_images: int = 15) -> str:
+def ocr_images_with_groq(images: list, api_key: str, max_images: int = 40) -> str:
     """Usa modelo de visão da Groq para extrair texto/descrição de fotos."""
     if not images or not api_key:
         return ""
@@ -687,7 +687,7 @@ def ocr_images_with_groq(images: list, api_key: str, max_images: int = 15) -> st
 
     client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
     parts = []
-    for img in images[:max_images]:
+    for img in images[:max_images]:  # limite de imagens por avaliação
         name = img["name"]
         data = img["data"]
         lower = name.lower()
@@ -700,7 +700,7 @@ def ocr_images_with_groq(images: list, api_key: str, max_images: int = 15) -> st
             mime = "image/gif"
         b64 = base64.b64encode(data).decode("ascii")
         # limitar tamanho — se muito grande, saltar
-        if len(b64) > 4_000_000:
+        if len(b64) > 8_000_000:
             parts.append(f"[Imagem demasiado grande para OCR: {name}]")
             continue
         try:
@@ -760,7 +760,7 @@ def auto_evaluate_domain(domain_id: int, api_key: str, docs_text: str) -> dict:
     client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
     results = {}
     batch_size = 8
-    docs_snippet = docs_text[:50000] if docs_text else "(Sem documentação carregada para este domínio.)"
+    docs_snippet = docs_text[:100000] if docs_text else "(Sem documentação carregada para este domínio.)"
 
     for i in range(0, len(inds), batch_size):
         batch = inds[i:i + batch_size]
@@ -1117,8 +1117,9 @@ No fim **confirma ou altera** manualmente em cada indicador.
     )
     st.info(
         "Formatos lidos: PDF, DOCX, TXT, MD, CSV, **Excel (.xlsx)** e **fotos** (OCR). "
-        "Fotos: OCR local (se disponível) ou via IA Groq na avaliação. "
-        "A documentação/imagens são enviadas à API Groq só durante a autoavaliação."
+        "Limite de upload: **até ~1 GB por ZIP** (ficheiros individuais até 200 MB). "
+        "Fotos: OCR local ou via IA Groq. "
+        "Textos muito longos são resumidos para a IA (limites da API)."
     )
 
     api_key_docs = st.text_input(
@@ -1142,7 +1143,7 @@ No fim **confirma ou altera** manualmente em cada indicador.
     }
     for i, (key, label) in domain_upload_labels.items():
         with cols[i]:
-            up = st.file_uploader(f"ZIP {label}", type=["zip"], key=f"zip_{key}")
+            up = st.file_uploader(f"ZIP {label}", type=["zip"], key=f"zip_{key}", help="Até cerca de 1 GB por ZIP (limite do servidor)")
             if up is not None:
                 raw = up.read()
                 with st.spinner(f"A extrair {label}…"):
