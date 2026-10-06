@@ -122,6 +122,7 @@ def init_state():
         "answers": {},      # id -> {level, evidence, na}
         "ncs": [],          # list of dicts
         "api_key": "",
+        "ai_provider": "groq",
         "chat_history": [],
         "docs_text": {},    # domain_id (str) or "all" -> extracted text
         "docs_files": {},   # domain_id -> list of file names
@@ -732,9 +733,11 @@ def extract_from_zip(zip_bytes: bytes) -> tuple:
 
 
 def ocr_images_with_groq(images: list, api_key: str, max_images: int = 40) -> str:
-    """Usa modelo de visão da Groq para extrair texto/descrição de fotos."""
+    """OCR de fotos via Groq Vision ou Gemini."""
     if not images or not api_key:
         return ""
+    if get_ai_provider() == "gemini":
+        return _ocr_images_gemini(images, api_key, max_images)
     try:
         from openai import OpenAI
         import base64
@@ -792,16 +795,52 @@ def ocr_images_with_groq(images: list, api_key: str, max_images: int = 40) -> st
     return "\n".join(parts)
 
 
+def _ocr_images_gemini(images: list, api_key: str, max_images: int = 40) -> str:
+    try:
+        import google.generativeai as genai
+        import tempfile
+        from pathlib import Path as _P
+    except ImportError:
+        return "[Instale google-generativeai para OCR com Gemini]"
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    parts = []
+    prompt = (
+        "És um assistente de auditoria de sustentabilidade vitivinícola. "
+        "Extrai TODO o texto visível nesta imagem. Se for foto de campo/instalação, "
+        "descreve de forma objetiva o relevante para evidências. Responde em português."
+    )
+    for img in images[:max_images]:
+        name = img["name"]
+        data = img["data"]
+        suffix = _P(name).suffix or ".jpg"
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(data)
+                tmp_path = tmp.name
+            uploaded = genai.upload_file(tmp_path)
+            resp = model.generate_content([prompt, uploaded])
+            content = resp.text or ""
+            parts.append(f"\n\n===== OCR IMAGEM: {name} =====\n{content}")
+            try:
+                genai.delete_file(uploaded.name)
+            except Exception:
+                pass
+            try:
+                _P(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+        except Exception as e:
+            parts.append(f"[OCR Gemini falhou para {name}: {e}]")
+    return "\n".join(parts)
+
+
+
 def auto_evaluate_domain(domain_id: int, api_key: str, docs_text: str) -> dict:
     """
     Pede à IA sugestões de nível + justificação para os indicadores visíveis do domínio.
     Devolve {ind_id: {level, evidence, reasoning}}.
     """
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return {"__error__": "Instale o pacote openai."}
-
     inds = []
     for ch in DATA[domain_id]["chapters"]:
         for ind in ch["indicators"]:
@@ -813,14 +852,13 @@ def auto_evaluate_domain(domain_id: int, api_key: str, docs_text: str) -> dict:
         return {}
 
     # Processar em lotes de 8 indicadores para caber no contexto
-    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
     results = {}
     batch_size = 8
     docs_snippet = docs_text[:100000] if docs_text else "(Sem documentação carregada para este domínio.)"
 
     for i in range(0, len(inds), batch_size):
         batch = inds[i:i + batch_size]
-        ind_list = "\\n".join(
+        ind_list = "\n".join(
             f"- {ind['id']} | {'KO' if ind['ko'] else 'opcional'} | {ind['title']}"
             for ind in batch
         )
@@ -847,31 +885,17 @@ DOCUMENTAÇÃO:
 {docs_snippet}
 """
         try:
-            resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.1,
-                max_tokens=2500,
-            )
-            raw = resp.choices[0].message.content.strip()
-            # limpar possíveis fences
-            raw = re.sub(r"^```(?:json)?\\s*", "", raw)
-            raw = re.sub(r"\\s*```$", "", raw)
-            arr = json.loads(raw)
-            if isinstance(arr, list):
-                for item in arr:
-                    iid = str(item.get("id", "")).strip()
-                    if not iid:
-                        continue
-                    results[iid] = {
-                        "level": item.get("level"),
-                        "na": bool(item.get("na")),
-                        "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
-                        "reasoning": (item.get("reasoning") or "")[:500],
-                    }
+            arr = _llm_json_array(prompt, api_key)
+            for item in arr:
+                iid = str(item.get("id", "")).strip()
+                if not iid:
+                    continue
+                results[iid] = {
+                    "level": item.get("level"),
+                    "na": bool(item.get("na")),
+                    "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
+                    "reasoning": (item.get("reasoning") or "")[:500],
+                }
         except Exception as e:
             results["__error__"] = f"Erro no lote {i // batch_size + 1}: {e}"
             break
@@ -882,11 +906,6 @@ DOCUMENTAÇÃO:
 
 def auto_evaluate_chapter(domain_id: int, chapter_id: str, api_key: str, docs_text: str) -> dict:
     """Avalia só os indicadores de um capítulo."""
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return {"__error__": "Instale o pacote openai."}
-
     inds = []
     for ch in DATA[domain_id]["chapters"]:
         if ch["id"] != chapter_id:
@@ -897,7 +916,6 @@ def auto_evaluate_chapter(domain_id: int, chapter_id: str, api_key: str, docs_te
     if not inds:
         return {}
 
-    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
     results = {}
     batch_size = 8
     docs_snippet = docs_text[:100000] if docs_text else "(Sem documentação carregada.)"
@@ -927,30 +945,17 @@ DOCUMENTAÇÃO:
 {docs_snippet}
 """
         try:
-            resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.1,
-                max_tokens=2500,
-            )
-            raw = resp.choices[0].message.content.strip()
-            raw = re.sub(r"^```(?:json)?\s*", "", raw)
-            raw = re.sub(r"\s*```$", "", raw)
-            arr = json.loads(raw)
-            if isinstance(arr, list):
-                for item in arr:
-                    iid = str(item.get("id", "")).strip()
-                    if not iid:
-                        continue
-                    results[iid] = {
-                        "level": item.get("level"),
-                        "na": bool(item.get("na")),
-                        "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
-                        "reasoning": (item.get("reasoning") or "")[:500],
-                    }
+            arr = _llm_json_array(prompt, api_key)
+            for item in arr:
+                iid = str(item.get("id", "")).strip()
+                if not iid:
+                    continue
+                results[iid] = {
+                    "level": item.get("level"),
+                    "na": bool(item.get("na")),
+                    "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
+                    "reasoning": (item.get("reasoning") or "")[:500],
+                }
         except Exception as e:
             results["__error__"] = f"Erro no lote: {e}"
             break
@@ -1035,22 +1040,27 @@ def apply_suggestions(suggestions: dict, only_empty: bool = True):
             set_answer(iid, na=False, level=level, evidence=text_ev[:2000])
 
 
-def ask_groq(question: str, api_key: str) -> str:
-    """Chama a API Groq (compatível OpenAI)."""
-    try:
-        from openai import OpenAI
-    except ImportError:
-        return "Erro: instale o pacote openai com:  pip install openai"
+def get_ai_provider():
+    return st.session_state.get("ai_provider", "groq")
 
-    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+
+def ask_ai(question: str, api_key: str, provider: str = None) -> str:
+    provider = provider or get_ai_provider()
     system = (
         "És um assistente especializado no Referencial Nacional de Certificação de "
         "Sustentabilidade do Setor Vitivinícola (RNCSSV, Julho 2025) e no procedimento P51 da CERTIS. "
-        "Ajudas operadores a preparar a autoavaliação: dicas de evidências e documentação por indicador e nível, "
-        "como subir de nível, interpretação de KO, OM, NCm, NCM e NCC. "
+        "Ajudas operadores a preparar a autoavaliação: dicas de evidências, níveis, KO, OM e NC. "
         "Responde em português de Portugal, de forma prática e objetiva."
     )
+    if provider == "gemini":
+        return _ask_gemini(question, api_key, system)
+    return _ask_groq_chat(question, api_key, system)
+
+
+def _ask_groq_chat(question: str, api_key: str, system: str) -> str:
     try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
@@ -1062,7 +1072,67 @@ def ask_groq(question: str, api_key: str) -> str:
         )
         return resp.choices[0].message.content
     except Exception as e:
-        return f"Erro na API: {e}"
+        return f"Erro na API Groq: {e}"
+
+
+def _ask_gemini(question: str, api_key: str, system: str) -> str:
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash",
+            system_instruction=system,
+        )
+        resp = model.generate_content(
+            question,
+            generation_config={"temperature": 0.3, "max_output_tokens": 1500},
+        )
+        return resp.text or "(sem resposta)"
+    except Exception as e:
+        return f"Erro na API Gemini: {e}"
+
+
+def _llm_json_array(prompt: str, api_key: str, provider: str = None) -> list:
+    """Groq ou Gemini → lista Python a partir de JSON array."""
+    provider = provider or get_ai_provider()
+    raw = ""
+    if provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        resp = model.generate_content(
+            "Responde APENAS com um JSON array válido, sem markdown.\n\n" + prompt,
+            generation_config={"temperature": 0.1, "max_output_tokens": 2500},
+        )
+        raw = (resp.text or "").strip()
+    else:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=2500,
+        )
+        raw = resp.choices[0].message.content.strip()
+    raw = re.sub(r"^```(?:json)?\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
+    if not raw.startswith("["):
+        m = re.search(r"\[.*\]", raw, re.DOTALL)
+        if m:
+            raw = m.group(0)
+    arr = json.loads(raw)
+    if not isinstance(arr, list):
+        raise RuntimeError("A resposta da IA não é um array JSON.")
+    return arr
+
+
+def ask_groq(question: str, api_key: str) -> str:
+    """Compatibilidade — usa o fornecedor escolhido."""
+    return ask_ai(question, api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -1306,12 +1376,27 @@ No fim **confirma ou altera** manualmente em cada indicador.
         "Limite ~1 GB por envio. Tudo é tido em conta na autoavaliação automática (com API Groq)."
     )
 
+    prov = st.radio(
+        "Fornecedor de IA",
+        options=["groq", "gemini"],
+        format_func=lambda x: "Groq (grátis, com limites)" if x == "groq" else "Google Gemini (grátis / pago)",
+        index=0 if st.session_state.get("ai_provider", "groq") == "groq" else 1,
+        horizontal=True,
+        key="ai_provider_radio",
+    )
+    st.session_state.ai_provider = prov
+    if prov == "groq":
+        st.caption("Key: console.groq.com → API Keys (gsk_...)")
+        ph = "gsk_..."
+    else:
+        st.caption("Key: aistudio.google.com/apikey → Get API key (AIza...)")
+        ph = "AIza..."
     api_key_docs = st.text_input(
-        "API Key Groq (necessária para autoavaliação)",
+        f"API Key ({'Groq' if prov == 'groq' else 'Gemini'})",
         value=st.session_state.api_key,
         type="password",
         key="api_key_docs",
-        placeholder="gsk_...",
+        placeholder=ph,
     )
     if api_key_docs:
         st.session_state.api_key = api_key_docs
@@ -1461,7 +1546,7 @@ A key começa por `gsk_...` e fica só no teu browser/sessão (não é partilhad
 
     if st.button("🚀 Avaliar automaticamente", type="primary", use_container_width=True):
         if not (st.session_state.api_key or "").strip():
-            st.error("Indique a API Key Groq (console.groq.com → API Keys).")
+            st.error("Indique a API Key (Groq ou Gemini) no campo acima.")
         elif not st.session_state.docs_text and not st.session_state.docs_images:
             st.error("Carregue documentação (Geral, domínio ou capítulo).")
         elif mode == "por_dominio" and not domains_to_run:
@@ -1562,7 +1647,7 @@ Esta secção usa a **API gratuita da Groq** (modelo Llama) para responder a dú
 3. Cole a key abaixo (fica apenas nesta sessão / neste PC)
 """
     )
-    api_key = st.text_input("API Key Groq", value=st.session_state.api_key, type="password", placeholder="gsk_...")
+    api_key = st.text_input("API Key (Groq ou Gemini)", value=st.session_state.api_key, type="password", placeholder="gsk_... ou AIza...")
     st.session_state.api_key = api_key
 
     # Histórico
@@ -1580,7 +1665,7 @@ Esta secção usa a **API gratuita da Groq** (modelo Llama) para responder a dú
             answer = "⚠️ Cole primeiro a sua API Key Groq no campo acima."
         else:
             with st.spinner("A pensar…"):
-                answer = ask_groq(question, api_key.strip())
+                answer = ask_ai(question, api_key.strip())
 
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         with st.chat_message("assistant"):
