@@ -715,7 +715,7 @@ def extract_from_zip(zip_bytes: bytes) -> tuple:
                     data = zf.read(info)
                 except Exception:
                     continue
-                if len(data) > 200 * 1024 * 1024:  # 200 MB por ficheiro dentro do ZIP
+                if len(data) > 500 * 1024 * 1024:  # 500 MB por ficheiro individual
                     names.append(fname + " [ficheiro demasiado grande, ignorado]")
                     continue
                 names.append(fname)
@@ -1189,13 +1189,15 @@ No fim **confirma ou altera** manualmente em cada indicador.
 
     st.subheader("1. Carregar documentação")
     st.caption(
-        "Pode enviar **ZIP** ou ficheiros soltos: **PDF, Excel, Word, fotos, TXT**. "
-        "Vários ficheiros por capítulo/domínio. "
+        "Em **Geral**, **por domínio** e **por capítulo** pode enviar vários ficheiros: "
+        "**PDF, Excel, Word, fotos, TXT e ZIP**. "
+        "Limite de upload ~**1 GB** por envio (máximo típico do plano gratuito Streamlit Cloud). "
         "Na avaliação, a IA junta geral + domínio + capítulos desse domínio."
     )
 
     # --- Geral + Domínios ---
     st.markdown("##### Geral e por domínio")
+    st.caption("Mesmas opções que nos capítulos: vários PDF / Excel / fotos / Word / ZIP de uma vez.")
     cols = st.columns(5)
     domain_upload_labels = {
         0: ("all", "Geral (todos)"),
@@ -1211,7 +1213,7 @@ No fim **confirma ou altera** manualmente em cada indicador.
                 type=ALLOWED_UPLOAD_TYPES,
                 key=f"zip_{key}",
                 accept_multiple_files=True,
-                help="ZIP e/ou PDF, Excel, fotos, Word…",
+                help="Vários ficheiros: PDF, Excel, fotos, Word, TXT ou ZIP (até ~1 GB no total)",
             )
             if up:
                 with st.spinner(f"A processar {label}…"):

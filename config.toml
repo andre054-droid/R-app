@@ -1,4 +1,5 @@
 [server]
+# Limite máximo prático no plano gratuito do Streamlit Cloud (~1 GB)
 maxUploadSize = 1024
 maxMessageSize = 1024
 
