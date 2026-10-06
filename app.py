@@ -879,6 +879,135 @@ DOCUMENTAÇÃO:
     return results
 
 
+
+def auto_evaluate_chapter(domain_id: int, chapter_id: str, api_key: str, docs_text: str) -> dict:
+    """Avalia só os indicadores de um capítulo."""
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return {"__error__": "Instale o pacote openai."}
+
+    inds = []
+    for ch in DATA[domain_id]["chapters"]:
+        if ch["id"] != chapter_id:
+            continue
+        for ind in ch["indicators"]:
+            if is_visible(ind):
+                inds.append(ind)
+    if not inds:
+        return {}
+
+    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+    results = {}
+    batch_size = 8
+    docs_snippet = docs_text[:100000] if docs_text else "(Sem documentação carregada.)"
+
+    for i in range(0, len(inds), batch_size):
+        batch = inds[i:i + batch_size]
+        ind_list = "\n".join(
+            f"- {ind['id']} | {'KO' if ind['ko'] else 'opcional'} | {ind['title']}"
+            for ind in batch
+        )
+        prompt = f"""És auditor de sustentabilidade vitivinícola (RNCSSV / VINIP03).
+Com base na DOCUMENTAÇÃO abaixo, sugere para cada indicador:
+- level: 0, 1, 2 ou 3 (ou null se impossível avaliar)
+- na: true só se for claramente não aplicável
+- evidence: frase curta com a origem/evidência na documentação
+- reasoning: 1-2 frases a justificar o nível
+
+Critérios: 0=sem evidências; 1=básico+legal; 2=plano+monitorização; 3=KPI+melhoria contínua.
+
+Responde APENAS com JSON array:
+[{{"id":"1.1.1","level":1,"na":false,"evidence":"...","reasoning":"..."}}, ...]
+
+INDICADORES DO CAPÍTULO {chapter_id}:
+{ind_list}
+
+DOCUMENTAÇÃO:
+{docs_snippet}
+"""
+        try:
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=2500,
+            )
+            raw = resp.choices[0].message.content.strip()
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw)
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                for item in arr:
+                    iid = str(item.get("id", "")).strip()
+                    if not iid:
+                        continue
+                    results[iid] = {
+                        "level": item.get("level"),
+                        "na": bool(item.get("na")),
+                        "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
+                        "reasoning": (item.get("reasoning") or "")[:500],
+                    }
+        except Exception as e:
+            results["__error__"] = f"Erro no lote: {e}"
+            break
+    return results
+
+
+def collect_docs_for_domain(d: int) -> tuple:
+    """Junta texto e imagens: geral + domínio + capítulos do domínio."""
+    parts = []
+    if "all" in st.session_state.docs_text:
+        parts.append(st.session_state.docs_text["all"])
+    if str(d) in st.session_state.docs_text:
+        parts.append(st.session_state.docs_text[str(d)])
+    for ch in DATA[d]["chapters"]:
+        ch_key = f"ch_{ch['id']}"
+        if ch_key in st.session_state.docs_text:
+            parts.append(
+                f"\n\n##### DOCUMENTAÇÃO CAPÍTULO {ch['id']} – {ch['title']}\n"
+                + st.session_state.docs_text[ch_key]
+            )
+    imgs = []
+    if "all" in st.session_state.docs_images:
+        imgs.extend(st.session_state.docs_images["all"])
+    if str(d) in st.session_state.docs_images:
+        imgs.extend(st.session_state.docs_images[str(d)])
+    for ch in DATA[d]["chapters"]:
+        ch_key = f"ch_{ch['id']}"
+        if ch_key in st.session_state.docs_images:
+            imgs.extend(st.session_state.docs_images[ch_key])
+    docs = "\n\n".join(parts) if parts else ""
+    return docs, imgs
+
+
+def collect_docs_for_chapter(d: int, chapter_id: str) -> tuple:
+    """Junta texto/imagens prioritários do capítulo + geral + domínio."""
+    parts = []
+    if "all" in st.session_state.docs_text:
+        parts.append(st.session_state.docs_text["all"])
+    if str(d) in st.session_state.docs_text:
+        parts.append(st.session_state.docs_text[str(d)])
+    ch_key = f"ch_{chapter_id}"
+    if ch_key in st.session_state.docs_text:
+        parts.append(
+            f"\n\n##### DOCUMENTAÇÃO CAPÍTULO {chapter_id}\n"
+            + st.session_state.docs_text[ch_key]
+        )
+    imgs = []
+    if "all" in st.session_state.docs_images:
+        imgs.extend(st.session_state.docs_images["all"])
+    if str(d) in st.session_state.docs_images:
+        imgs.extend(st.session_state.docs_images[str(d)])
+    if ch_key in st.session_state.docs_images:
+        imgs.extend(st.session_state.docs_images[ch_key])
+    docs = "\n\n".join(parts) if parts else ""
+    return docs, imgs
+
+
 def apply_suggestions(suggestions: dict, only_empty: bool = True):
     """Aplica sugestões da IA às answers (confirmação do utilizador)."""
     for iid, sug in suggestions.items():
@@ -1285,72 +1414,110 @@ No fim **confirma ou altera** manualmente em cada indicador.
             st.rerun()
 
     st.subheader("2. Correr autoavaliação com IA")
-    only_empty = st.checkbox("Preencher só indicadores ainda vazios", value=True)
-    domains_to_run = st.multiselect(
-        "Domínios a avaliar",
-        options=[1, 2, 3, 4],
-        default=[1, 2, 3, 4],
-        format_func=lambda d: f"{d}. {DOMAIN_NAMES[d]}",
+    st.markdown(
+        """
+**API Key Groq (obrigatória):** cria grátis em [console.groq.com](https://console.groq.com) → **API Keys** → **Create API Key**.  
+A key começa por `gsk_...` e fica só no teu browser/sessão (não é partilhada pela app).
+"""
     )
+    only_empty = st.checkbox("Preencher só indicadores ainda vazios", value=True)
+
+    mode = st.radio(
+        "Modo de avaliação",
+        options=["por_dominio", "por_capitulo"],
+        format_func=lambda x: {
+            "por_dominio": "Por domínio (avalia todos os capítulos do domínio)",
+            "por_capitulo": "Capítulo a capítulo (escolhe os capítulos)",
+        }[x],
+        horizontal=True,
+    )
+
+    domains_to_run = []
+    chapters_to_run = []  # list of (domain_id, chapter_id, title)
+
+    if mode == "por_dominio":
+        domains_to_run = st.multiselect(
+            "Domínios a avaliar",
+            options=[1, 2, 3, 4],
+            default=[1, 2, 3, 4],
+            format_func=lambda d: f"{d}. {DOMAIN_NAMES[d]}",
+        )
+    else:
+        st.caption("Seleccione um ou mais capítulos:")
+        for d in range(1, 5):
+            with st.expander(f"Domínio {d}: {DOMAIN_NAMES[d]}", expanded=(d == 1)):
+                opts = [(d, ch["id"], ch["title"]) for ch in DATA[d]["chapters"]]
+                selected = st.multiselect(
+                    f"Capítulos do domínio {d}",
+                    options=[c[1] for c in opts],
+                    format_func=lambda cid, _opts=opts: next(
+                        (f"{c[1]} – {c[2]}" for c in _opts if c[1] == cid), cid
+                    ),
+                    key=f"sel_ch_{d}",
+                )
+                for ch in DATA[d]["chapters"]:
+                    if ch["id"] in selected:
+                        chapters_to_run.append((d, ch["id"], ch["title"]))
 
     if st.button("🚀 Avaliar automaticamente", type="primary", use_container_width=True):
         if not (st.session_state.api_key or "").strip():
-            st.error("Indique a API Key Groq.")
-        elif not st.session_state.docs_text:
-            st.error("Carregue pelo menos um ZIP de documentação.")
-        elif not domains_to_run:
+            st.error("Indique a API Key Groq (console.groq.com → API Keys).")
+        elif not st.session_state.docs_text and not st.session_state.docs_images:
+            st.error("Carregue documentação (Geral, domínio ou capítulo).")
+        elif mode == "por_dominio" and not domains_to_run:
             st.error("Selecione pelo menos um domínio.")
+        elif mode == "por_capitulo" and not chapters_to_run:
+            st.error("Selecione pelo menos um capítulo.")
         else:
             all_sug = dict(st.session_state.auto_suggestions)
             progress = st.progress(0)
             status = st.empty()
-            n = len(domains_to_run)
-            for idx_d, d in enumerate(domains_to_run):
-                status.write(f"A avaliar domínio {d}. {DOMAIN_NAMES[d]}…")
-                # juntar texto geral + do domínio
-                parts = []
-                if "all" in st.session_state.docs_text:
-                    parts.append(st.session_state.docs_text["all"])
-                if str(d) in st.session_state.docs_text:
-                    parts.append(st.session_state.docs_text[str(d)])
-                # documentação por capítulo deste domínio (ch_1.1, ch_2.3, ...)
-                for ch in DATA[d]["chapters"]:
-                    ch_key = f"ch_{ch['id']}"
-                    if ch_key in st.session_state.docs_text:
-                        parts.append(
-                            f"\n\n##### DOCUMENTAÇÃO CAPÍTULO {ch['id']} – {ch['title']}\n"
-                            + st.session_state.docs_text[ch_key]
-                        )
-                # OCR de imagens (IA)
-                imgs = []
-                if "all" in st.session_state.docs_images:
-                    imgs.extend(st.session_state.docs_images["all"])
-                if str(d) in st.session_state.docs_images:
-                    imgs.extend(st.session_state.docs_images[str(d)])
-                for ch in DATA[d]["chapters"]:
-                    ch_key = f"ch_{ch['id']}"
-                    if ch_key in st.session_state.docs_images:
-                        imgs.extend(st.session_state.docs_images[ch_key])
-                # só imagens ainda pendentes (sem OCR local bem-sucedido)
-                pending = [im for im in imgs if im.get("name")]
-                if pending and st.session_state.api_key:
-                    status.write(f"OCR de {min(len(pending), 15)} imagens (domínio {d})…")
-                    ocr_extra = ocr_images_with_groq(pending, st.session_state.api_key.strip())
-                    if ocr_extra:
-                        parts.append(ocr_extra)
-                docs = "\n\n".join(parts) if parts else ""
-                if not docs.strip():
-                    st.warning(f"Sem documentação específica para o domínio {d} (a usar texto geral se existir).")
-                sug = auto_evaluate_domain(d, st.session_state.api_key.strip(), docs)
-                if "__error__" in sug:
-                    st.error(sug["__error__"])
-                for k, v in sug.items():
-                    if not k.startswith("__"):
-                        all_sug[k] = v
-                progress.progress((idx_d + 1) / n)
+            key = st.session_state.api_key.strip()
+
+            if mode == "por_dominio":
+                n = len(domains_to_run)
+                for idx_d, d in enumerate(domains_to_run):
+                    status.write(f"A avaliar domínio {d}. {DOMAIN_NAMES[d]}…")
+                    docs, pending = collect_docs_for_domain(d)
+                    if pending:
+                        status.write(f"OCR de {min(len(pending), 40)} imagens (domínio {d})…")
+                        ocr_extra = ocr_images_with_groq(pending, key)
+                        if ocr_extra:
+                            docs = (docs or "") + "\n\n" + ocr_extra
+                    if not (docs or "").strip():
+                        st.warning(f"Sem documentação para o domínio {d}.")
+                    sug = auto_evaluate_domain(d, key, docs or "")
+                    if "__error__" in sug:
+                        st.error(sug["__error__"])
+                    for k, v in sug.items():
+                        if not k.startswith("__"):
+                            all_sug[k] = v
+                    progress.progress((idx_d + 1) / n)
+            else:
+                n = len(chapters_to_run)
+                for idx_c, (d, cid, ctitle) in enumerate(chapters_to_run):
+                    status.write(f"A avaliar capítulo {cid} – {ctitle}…")
+                    docs, pending = collect_docs_for_chapter(d, cid)
+                    if pending:
+                        status.write(f"OCR de imagens ({cid})…")
+                        ocr_extra = ocr_images_with_groq(pending, key)
+                        if ocr_extra:
+                            docs = (docs or "") + "\n\n" + ocr_extra
+                    if not (docs or "").strip():
+                        st.warning(f"Sem documentação para o capítulo {cid}.")
+                    sug = auto_evaluate_chapter(d, cid, key, docs or "")
+                    if "__error__" in sug:
+                        st.error(sug["__error__"])
+                    for k, v in sug.items():
+                        if not k.startswith("__"):
+                            all_sug[k] = v
+                    progress.progress((idx_c + 1) / n)
+
             st.session_state.auto_suggestions = all_sug
             status.write("Concluído. Reveja as sugestões abaixo e aplique.")
-            st.success(f"Sugestões geradas para {len([k for k in all_sug if not k.startswith('__')])} indicadores.")
+            st.success(
+                f"Sugestões geradas para {len([k for k in all_sug if not k.startswith('__')])} indicadores."
+            )
 
     if st.session_state.auto_suggestions:
         st.subheader("3. Rever sugestões e confirmar")
