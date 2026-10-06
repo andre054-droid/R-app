@@ -1062,7 +1062,7 @@ def _ask_groq_chat(question: str, api_key: str, system: str) -> str:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
         last_err = None
-        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"):
+        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant":
             try:
                 resp = client.chat.completions.create(
                     model=model,
@@ -1119,7 +1119,7 @@ def _llm_json_array(prompt: str, api_key: str, provider: str = None) -> list:
         client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
         raw = ""
         last_err = None
-        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"):
+        for model in ("llama-3.3-70b-versatile", "llama-3.1-8b-instant":
             try:
                 resp = client.chat.completions.create(
                     model=model,
