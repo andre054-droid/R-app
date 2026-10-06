@@ -82,6 +82,17 @@ with open(DATA_PATH, encoding="utf-8") as f:
 
 DOMAIN_NAMES = {1: "Gestão e Melhoria Contínua", 2: "Ambiental", 3: "Social", 4: "Económico"}
 
+def _build_chapter_index():
+    """Lista (domain_id, chapter_id, chapter_title) a partir de DATA."""
+    rows = []
+    for d in sorted(DATA.keys()):
+        for ch in DATA[d]["chapters"]:
+            rows.append((d, ch["id"], ch["title"]))
+    return rows
+
+CHAPTERS = None  # preenchido após load; ver init abaixo
+
+
 LEVEL_DESC = {
     0: "Não cumprido / sem evidências",
     1: "Evidências básicas + cumprimento legal mínimo",
@@ -1133,6 +1144,13 @@ No fim **confirma ou altera** manualmente em cada indicador.
         st.session_state.api_key = api_key_docs
 
     st.subheader("1. Carregar ZIPs de documentação")
+    st.caption(
+        "Pode carregar um ZIP geral, por domínio e/ou por capítulo. "
+        "Na avaliação, a IA junta a documentação geral + do domínio + dos capítulos desse domínio."
+    )
+
+    # --- Geral + Domínios ---
+    st.markdown("##### Geral e por domínio")
     cols = st.columns(5)
     domain_upload_labels = {
         0: ("all", "Geral (todos)"),
@@ -1143,7 +1161,12 @@ No fim **confirma ou altera** manualmente em cada indicador.
     }
     for i, (key, label) in domain_upload_labels.items():
         with cols[i]:
-            up = st.file_uploader(f"ZIP {label}", type=["zip"], key=f"zip_{key}", help="Até cerca de 1 GB por ZIP (limite do servidor)")
+            up = st.file_uploader(
+                f"ZIP {label}",
+                type=["zip"],
+                key=f"zip_{key}",
+                help="Até cerca de 1 GB por ZIP",
+            )
             if up is not None:
                 raw = up.read()
                 with st.spinner(f"A extrair {label}…"):
@@ -1153,21 +1176,55 @@ No fim **confirma ou altera** manualmente em cada indicador.
                 st.session_state.docs_files[sk] = names
                 st.session_state.docs_images[sk] = images
                 img_msg = f" · {len(images)} imagens" if images else ""
-                st.success(f"{len(names)} ficheiros · {len(combined):,} caracteres{img_msg}")
+                st.success(f"{len(names)} fich. · {len(combined):,} car.{img_msg}")
+
+    # --- Por capítulo ---
+    st.markdown("##### Por capítulo")
+    st.caption("Abra o domínio e carregue o ZIP do capítulo correspondente (ex.: 2.3 Gestão de Pragas).")
+    for d in range(1, 5):
+        with st.expander(f"Domínio {d}: {DOMAIN_NAMES[d]} — capítulos", expanded=False):
+            chapters = DATA[d]["chapters"]
+            # 2 colunas de uploaders
+            for ci in range(0, len(chapters), 2):
+                ccols = st.columns(2)
+                for j, col in enumerate(ccols):
+                    if ci + j >= len(chapters):
+                        break
+                    ch = chapters[ci + j]
+                    ch_key = f"ch_{ch['id']}"
+                    with col:
+                        up = st.file_uploader(
+                            f"ZIP {ch['id']} – {ch['title'][:40]}",
+                            type=["zip"],
+                            key=f"zip_{ch_key}",
+                            help=f"Documentação do capítulo {ch['id']}",
+                        )
+                        if up is not None:
+                            raw = up.read()
+                            with st.spinner(f"A extrair {ch['id']}…"):
+                                combined, names, images = extract_from_zip(raw)
+                            st.session_state.docs_text[ch_key] = combined
+                            st.session_state.docs_files[ch_key] = names
+                            st.session_state.docs_images[ch_key] = images
+                            img_msg = f" · {len(images)} img" if images else ""
+                            st.success(f"{ch['id']}: {len(names)} fich. · {len(combined):,} car.{img_msg}")
 
     # Resumo do que está carregado
     if st.session_state.docs_text:
         st.subheader("Documentação carregada")
         for sk, txt in st.session_state.docs_text.items():
-            label = domain_upload_labels.get(
-                int(sk) if sk.isdigit() else 0, (sk, sk)
-            )[1] if sk != "all" else "Geral (todos)"
             if sk == "all":
                 label = "Geral (todos)"
             elif sk.isdigit():
-                label = f"{sk}. {DOMAIN_NAMES.get(int(sk), '')}"
+                label = f"Domínio {sk}. {DOMAIN_NAMES.get(int(sk), '')}"
+            elif sk.startswith("ch_"):
+                label = f"Capítulo {sk[3:]}"
+            else:
+                label = sk
             files = st.session_state.docs_files.get(sk, [])
-            with st.expander(f"{label} — {len(files)} ficheiros, {len(txt):,} caracteres"):
+            nimg = len(st.session_state.docs_images.get(sk, []))
+            extra = f", {nimg} imagens" if nimg else ""
+            with st.expander(f"{label} — {len(files)} ficheiros, {len(txt):,} caracteres{extra}"):
                 st.caption(", ".join(files[:30]) + ("…" if len(files) > 30 else ""))
                 st.text_area("Pré-visualização", txt[:3000], height=120, disabled=True, key=f"prev_{sk}")
 
@@ -1207,12 +1264,24 @@ No fim **confirma ou altera** manualmente em cada indicador.
                     parts.append(st.session_state.docs_text["all"])
                 if str(d) in st.session_state.docs_text:
                     parts.append(st.session_state.docs_text[str(d)])
-                # OCR de imagens (IA) se ainda não estiver no texto
+                # documentação por capítulo deste domínio (ch_1.1, ch_2.3, ...)
+                for ch in DATA[d]["chapters"]:
+                    ch_key = f"ch_{ch['id']}"
+                    if ch_key in st.session_state.docs_text:
+                        parts.append(
+                            f"\n\n##### DOCUMENTAÇÃO CAPÍTULO {ch['id']} – {ch['title']}\n"
+                            + st.session_state.docs_text[ch_key]
+                        )
+                # OCR de imagens (IA)
                 imgs = []
                 if "all" in st.session_state.docs_images:
                     imgs.extend(st.session_state.docs_images["all"])
                 if str(d) in st.session_state.docs_images:
                     imgs.extend(st.session_state.docs_images[str(d)])
+                for ch in DATA[d]["chapters"]:
+                    ch_key = f"ch_{ch['id']}"
+                    if ch_key in st.session_state.docs_images:
+                        imgs.extend(st.session_state.docs_images[ch_key])
                 # só imagens ainda pendentes (sem OCR local bem-sucedido)
                 pending = [im for im in imgs if im.get("name")]
                 if pending and st.session_state.api_key:
