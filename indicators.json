@@ -32,7 +32,7 @@
         "indicators": [
           {
             "id": "1.2.1",
-            "title": "Ações com as partes interessadas",
+            "title": "Ações com as partes Interessadas",
             "scope": "ambos",
             "ko": true
           },
@@ -100,7 +100,7 @@
             "id": "1.4.2",
             "title": "Plano de gestão de resíduos",
             "scope": "transf",
-            "ko": true
+            "ko": false
           },
           {
             "id": "1.4.3",
@@ -110,7 +110,7 @@
           },
           {
             "id": "1.4.4",
-            "title": "Tratamento de águas residuais",
+            "title": "Utilização de águas residuais",
             "scope": "transf",
             "ko": false
           }
@@ -205,7 +205,7 @@
           },
           {
             "id": "2.1.9",
-            "title": "Sensibilização dos colaboradores para a eficiência hídrica",
+            "title": "Sensibilização dos Trabalhadores para a eficiência hídrica",
             "scope": "transf",
             "ko": false
           }
@@ -289,7 +289,7 @@
           },
           {
             "id": "2.3.5",
-            "title": "Capacitação dos colaboradores que manipulam fitofármacos",
+            "title": "Capacitação dos trabalhadores que manipulam fitofármacos",
             "scope": "vinha",
             "ko": true
           },
@@ -319,43 +319,37 @@
           },
           {
             "id": "2.4.2",
-            "title": "Gestão de Habitats Naturais e Seminaturais (detalhe)",
-            "scope": "vinha",
-            "ko": false
-          },
-          {
-            "id": "2.4.3",
             "title": "Melhoria da biodiversidade vegetal e do solo",
             "scope": "vinha",
             "ko": true
           },
           {
-            "id": "2.4.4",
+            "id": "2.4.3",
             "title": "Espécies sensíveis",
             "scope": "vinha",
             "ko": false
           },
           {
-            "id": "2.4.5",
+            "id": "2.4.4",
             "title": "Gestão de habitats ripários",
             "scope": "vinha",
             "ko": false
           },
           {
-            "id": "2.4.6",
+            "id": "2.4.5",
             "title": "Habitat de aves e morcegos",
             "scope": "vinha",
             "ko": false
           },
           {
-            "id": "2.4.7",
+            "id": "2.4.6",
             "title": "Gestão de bosquetes e árvores isoladas",
             "scope": "vinha",
             "ko": false
           },
           {
-            "id": "2.4.8",
-            "title": "Gestão da vegetação adjacente à vinha",
+            "id": "2.4.7",
+            "title": "Gestão da vegetação (excluído os bosquetes e árvores isoladas) adjacentes à vinha",
             "scope": "vinha",
             "ko": false
           }
@@ -363,7 +357,7 @@
       },
       {
         "id": "2.5",
-        "title": "Alterações Climáticas e Emissões",
+        "title": "Ação Climática",
         "indicators": [
           {
             "id": "2.5.1",
@@ -404,13 +398,13 @@
           {
             "id": "2.6.1",
             "title": "Consumo e utilização de energia",
-            "scope": "ambos",
+            "scope": "vinha",
             "ko": true
           },
           {
             "id": "2.6.2",
             "title": "Plano de melhoria de eficiência energética",
-            "scope": "ambos",
+            "scope": "vinha",
             "ko": false
           },
           {
@@ -504,7 +498,7 @@
         "indicators": [
           {
             "id": "3.2.1",
-            "title": "Desenvolvimento da sustentabilidade interna",
+            "title": "Desenvolvimento da sustentabilidade “interna”",
             "scope": "ambos",
             "ko": false
           },
@@ -558,15 +552,21 @@
         "indicators": [
           {
             "id": "3.4.1",
-            "title": "Colaboração com outras organizações vitivinícolas da região",
+            "title": "Colaboração com outras organizações vitivinícolas",
             "scope": "ambos",
             "ko": false
           },
           {
-            "id": "3.4.3",
-            "title": "Atualização tecnológica da indústria",
+            "id": "3.4.2",
+            "title": "Atualização tecnológica da organização",
             "scope": "ambos",
-            "ko": false
+            "ko": true
+          },
+          {
+            "id": "3.4.3",
+            "title": "Liberdade de Associação",
+            "scope": "ambos",
+            "ko": true
           }
         ]
       }
@@ -629,7 +629,7 @@
           },
           {
             "id": "4.2.2",
-            "title": "Gestão e armazenamento de substâncias perigosas (exceto combustível)",
+            "title": "Gestão e armazenamento de substâncias perigosas (com exceção de reservatórios de combustível)",
             "scope": "ambos",
             "ko": true
           },
