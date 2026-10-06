@@ -1,0 +1,646 @@
+{
+  "1": {
+    "name": "Gestão e Melhoria Contínua",
+    "chapters": [
+      {
+        "id": "1.1",
+        "title": "Estratégia de Sustentabilidade",
+        "indicators": [
+          {
+            "id": "1.1.1",
+            "title": "Gestão da Sustentabilidade",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "1.1.2",
+            "title": "Compras sustentáveis",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.1.3",
+            "title": "Sistemas de agricultura sustentável",
+            "scope": "vinha",
+            "ko": true
+          }
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Envolvimento das Partes Interessadas",
+        "indicators": [
+          {
+            "id": "1.2.1",
+            "title": "Ações com as partes interessadas",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "1.2.2",
+            "title": "Contributo para a governança participada na região",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.2.3",
+            "title": "Envolvimento e desenvolvimento da Comunidade",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.2.4",
+            "title": "Impactos na Comunidade",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.2.5",
+            "title": "Promoção do consumo responsável de vinhos junto dos consumidores",
+            "scope": "transf",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Liderança e Organização",
+        "indicators": [
+          {
+            "id": "1.3.1",
+            "title": "Políticas e Procedimentos de ética e integridade",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.3.2",
+            "title": "Estrutura responsável pela sustentabilidade na organização",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.3.3",
+            "title": "Promoção da sustentabilidade na organização",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "1.4",
+        "title": "Estratégias de Valorização de Resíduos",
+        "indicators": [
+          {
+            "id": "1.4.1",
+            "title": "Gestão dos resíduos gerados na vinha",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "1.4.2",
+            "title": "Plano de gestão de resíduos",
+            "scope": "transf",
+            "ko": true
+          },
+          {
+            "id": "1.4.3",
+            "title": "Gestão de subprodutos",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "1.4.4",
+            "title": "Tratamento de águas residuais",
+            "scope": "transf",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "1.5",
+        "title": "Qualidade e Rastreabilidade",
+        "indicators": [
+          {
+            "id": "1.5.1",
+            "title": "Melhoria contínua de processos e produtos",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "1.5.2",
+            "title": "Qualidade, Segurança alimentar e Sistema de Gestão Integrado",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "1.5.3",
+            "title": "Rastreabilidade",
+            "scope": "transf",
+            "ko": true
+          },
+          {
+            "id": "1.5.4",
+            "title": "Controlo de Fornecedores",
+            "scope": "transf",
+            "ko": true
+          }
+        ]
+      }
+    ]
+  },
+  "2": {
+    "name": "Ambiental",
+    "chapters": [
+      {
+        "id": "2.1",
+        "title": "Gestão da Água",
+        "indicators": [
+          {
+            "id": "2.1.1",
+            "title": "Fontes de água usadas na produção primária",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.1.2",
+            "title": "Gestão dos Recursos Hídricos",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.1.3",
+            "title": "Monitorização da qualidade da água de irrigação",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.1.4",
+            "title": "Sistema de irrigação e seu funcionamento",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.1.5",
+            "title": "Manutenção do sistema de rega",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.1.6",
+            "title": "Utilização de água na transformação",
+            "scope": "transf",
+            "ko": true
+          },
+          {
+            "id": "2.1.7",
+            "title": "Qualidade da água",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.1.8",
+            "title": "Eficiência da utilização da água",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.1.9",
+            "title": "Sensibilização dos colaboradores para a eficiência hídrica",
+            "scope": "transf",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "2.2",
+        "title": "Gestão do Solo",
+        "indicators": [
+          {
+            "id": "2.2.1",
+            "title": "Características físicas e químicas do solo",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.2.2",
+            "title": "Mapeamento do Solo",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.2.3",
+            "title": "Mobilização do solo",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.2.4",
+            "title": "Gestão da erosão",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.2.5",
+            "title": "Gestão do solo com culturas de cobertura",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.2.6",
+            "title": "Matéria Orgânica",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.2.7",
+            "title": "Gestão do azoto",
+            "scope": "vinha",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "2.3",
+        "title": "Gestão de Pragas e Doenças",
+        "indicators": [
+          {
+            "id": "2.3.1",
+            "title": "Monitorização dos inimigos das culturas",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.3.2",
+            "title": "Aplicação de fitofármacos",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.3.3",
+            "title": "Minimização do impacto do efeito deriva",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.3.4",
+            "title": "Manutenção e calibração dos pulverizadores",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.3.5",
+            "title": "Capacitação dos colaboradores que manipulam fitofármacos",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.3.6",
+            "title": "Tratamento de embalagens e de restos de calda",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.3.7",
+            "title": "Plano de gestão de pragas",
+            "scope": "transf",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "2.4",
+        "title": "Plano de Gestão dos Ecossistemas",
+        "indicators": [
+          {
+            "id": "2.4.1",
+            "title": "Gestão de Habitats Naturais e Seminaturais",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.2",
+            "title": "Gestão de Habitats Naturais e Seminaturais (detalhe)",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.3",
+            "title": "Melhoria da biodiversidade vegetal e do solo",
+            "scope": "vinha",
+            "ko": true
+          },
+          {
+            "id": "2.4.4",
+            "title": "Espécies sensíveis",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.5",
+            "title": "Gestão de habitats ripários",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.6",
+            "title": "Habitat de aves e morcegos",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.7",
+            "title": "Gestão de bosquetes e árvores isoladas",
+            "scope": "vinha",
+            "ko": false
+          },
+          {
+            "id": "2.4.8",
+            "title": "Gestão da vegetação adjacente à vinha",
+            "scope": "vinha",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "2.5",
+        "title": "Alterações Climáticas e Emissões",
+        "indicators": [
+          {
+            "id": "2.5.1",
+            "title": "Pegada de Carbono",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "2.5.2",
+            "title": "Medidas de Adaptação às Alterações Climáticas",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "2.5.3",
+            "title": "Medidas de Mitigação às Alterações Climáticas",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "2.5.4",
+            "title": "Gestão dos poluentes atmosféricos",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "2.5.5",
+            "title": "Logística e distribuição",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "2.6",
+        "title": "Eficiência Energética",
+        "indicators": [
+          {
+            "id": "2.6.1",
+            "title": "Consumo e utilização de energia",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "2.6.2",
+            "title": "Plano de melhoria de eficiência energética",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "2.6.3",
+            "title": "Gestão da energia elétrica adquirida",
+            "scope": "transf",
+            "ko": true
+          },
+          {
+            "id": "2.6.4",
+            "title": "Energias renováveis",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.6.5",
+            "title": "Eficiência energética dos equipamentos",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.6.6",
+            "title": "Iluminação",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.6.7",
+            "title": "Aquecimento e ar condicionado (AVAC)",
+            "scope": "transf",
+            "ko": false
+          },
+          {
+            "id": "2.6.8",
+            "title": "Sistemas de refrigeração",
+            "scope": "transf",
+            "ko": false
+          }
+        ]
+      }
+    ]
+  },
+  "3": {
+    "name": "Social",
+    "chapters": [
+      {
+        "id": "3.1",
+        "title": "Condições de Trabalho",
+        "indicators": [
+          {
+            "id": "3.1.1",
+            "title": "Promover a equidade e a diversidade do emprego",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.1.2",
+            "title": "Saúde e segurança no trabalho",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "3.1.3",
+            "title": "Manipulação de substâncias perigosas",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "3.1.4",
+            "title": "Planeamento e objetivos de RH",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.1.5",
+            "title": "Tempo de trabalho e remuneração",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "3.1.6",
+            "title": "Mão-de-obra subcontratada",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "3.2",
+        "title": "Capacitação e Competências",
+        "indicators": [
+          {
+            "id": "3.2.1",
+            "title": "Desenvolvimento da sustentabilidade interna",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.2.2",
+            "title": "Formação profissional contínua",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "3.2.3",
+            "title": "Teambuilding",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "3.3",
+        "title": "Impacto Local",
+        "indicators": [
+          {
+            "id": "3.3.1",
+            "title": "Relação com a comunidade",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "3.3.2",
+            "title": "Compras locais",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.3.3",
+            "title": "Contributo para atividade turística na região",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.3.4",
+            "title": "Contributo para a qualidade da paisagem",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "3.4",
+        "title": "Envolvimento Setorial",
+        "indicators": [
+          {
+            "id": "3.4.1",
+            "title": "Colaboração com outras organizações vitivinícolas da região",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "3.4.3",
+            "title": "Atualização tecnológica da indústria",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      }
+    ]
+  },
+  "4": {
+    "name": "Económico",
+    "chapters": [
+      {
+        "id": "4.1",
+        "title": "Investimentos e Rentabilidade",
+        "indicators": [
+          {
+            "id": "4.1.1",
+            "title": "Orçamento e controlo",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "4.1.2",
+            "title": "Investimento",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "4.1.3",
+            "title": "Eficiência dos fatores de produção",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "4.1.4",
+            "title": "Parceria e/ou relações com instituições de I&D",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "4.1.5",
+            "title": "Economia e finanças",
+            "scope": "ambos",
+            "ko": false
+          },
+          {
+            "id": "4.1.6",
+            "title": "Plantação de vinhas novas",
+            "scope": "vinha",
+            "ko": false
+          }
+        ]
+      },
+      {
+        "id": "4.2",
+        "title": "Minimização de Riscos Produtivos",
+        "indicators": [
+          {
+            "id": "4.2.1",
+            "title": "Plano de gestão de risco",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "4.2.2",
+            "title": "Gestão e armazenamento de substâncias perigosas (exceto combustível)",
+            "scope": "ambos",
+            "ko": true
+          },
+          {
+            "id": "4.2.3",
+            "title": "Reservatórios de combustível",
+            "scope": "ambos",
+            "ko": false
+          }
+        ]
+      }
+    ]
+  }
+}

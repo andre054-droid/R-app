@@ -1,0 +1,72 @@
+============================================================
+RNCSSV – Autoavaliação de Sustentabilidade (versão Python)
+============================================================
+
+REQUISITOS
+----------
+• Python 3.9 ou superior (já tem)
+• Ligação à internet só na primeira instalação e se quiser usar a IA
+
+
+INSTALAÇÃO (só uma vez, no seu PC)
+----------------------------------
+1. Abra o Terminal / PowerShell / Anaconda Prompt
+2. Vá à pasta onde está a aplicação:
+     cd caminho\para\rncssv-python
+
+3. Instale as dependências:
+     pip install -r requirements.txt
+
+   (ou, se usar conda:)
+     pip install streamlit openai
+
+
+COMO CORRER
+-----------
+Na mesma pasta, execute:
+
+     streamlit run app.py
+
+O browser abre automaticamente em http://localhost:8501
+
+Para parar: no terminal pressione Ctrl+C
+
+
+USAR NOUTRO PC
+--------------
+1. Copie a pasta inteira "rncssv-python" (com app.py, indicators.json e requirements.txt)
+2. No outro PC, instale Python (se ainda não tiver)
+3. Na pasta, corra:
+     pip install -r requirements.txt
+     streamlit run app.py
+
+Não precisa de instalar mais nada além do Python + estes dois pacotes.
+
+
+FUNCIONALIDADES
+----------------
+• 87 indicadores do referencial (todos os domínios)
+• Filtro Vinha / Transformação / Ambos
+• Níveis 0-3 + evidências + Não aplicável
+• Dicas de documentação e como subir de nível
+• Cálculo automático da % e alerta de KO
+• Secção OM / NCm / NCM / NCC (P51)
+• Exportar JSON e resumo texto
+• Carregar progresso anterior (JSON)
+• Chat com IA (Groq – API gratuita)
+
+
+ATIVAR A IA (opcional)
+----------------------
+1. Crie conta gratuita em https://console.groq.com
+2. Gere uma API Key
+3. Na app, separador "Ajuda IA", cole a key
+4. Faça perguntas sobre indicadores, evidências, níveis, etc.
+
+
+FICHEIROS
+---------
+app.py              → aplicação principal
+indicators.json     → lista dos indicadores do referencial
+requirements.txt    → pacotes necessários
+COMO_USAR.txt       → este ficheiro
