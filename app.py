@@ -646,6 +646,51 @@ def extract_text_from_bytes(name: str, data: bytes) -> str:
     return f"[Tipo de ficheiro não processado: {name}]"
 
 
+
+ALLOWED_UPLOAD_TYPES = [
+    "zip", "pdf", "docx", "txt", "md", "csv",
+    "xlsx", "xlsm", "xls",
+    "png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
+]
+
+
+def process_uploaded_files(files) -> tuple:
+    """Processa lista de UploadedFile (ZIP e/ou PDF/Excel/fotos/...).
+    Devolve (texto_agregado, nomes, imagens).
+    """
+    if not files:
+        return "", [], []
+    # Streamlit pode devolver 1 ficheiro ou lista
+    if not isinstance(files, (list, tuple)):
+        files = [files]
+
+    all_text = []
+    all_names = []
+    all_images = []
+
+    for f in files:
+        name = getattr(f, "name", "ficheiro")
+        data = f.read()
+        lower = name.lower()
+        if lower.endswith(".zip"):
+            combined, names, images = extract_from_zip(data)
+            all_text.append(combined)
+            all_names.extend(names)
+            all_images.extend(images)
+        else:
+            all_names.append(name)
+            if lower.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp")):
+                all_images.append({"name": name, "data": data})
+            chunk = extract_text_from_bytes(name, data)
+            if chunk.strip():
+                all_text.append(f"\n\n===== FICHEIRO: {name} =====\n{chunk[:20000]}")
+
+    combined = "\n".join(all_text)
+    if len(combined) > 400000:
+        combined = combined[:400000] + "\n\n[... texto truncado por tamanho ...]"
+    return combined, all_names, all_images
+
+
 def extract_from_zip(zip_bytes: bytes) -> tuple:
     """Devolve (texto_agregado, lista_nomes, lista_imagens).
     lista_imagens = [{name, data}, ...] para OCR via IA se necessário.
@@ -1127,10 +1172,9 @@ No fim **confirma ou altera** manualmente em cada indicador.
 """
     )
     st.info(
-        "Formatos lidos: PDF, DOCX, TXT, MD, CSV, **Excel (.xlsx)** e **fotos** (OCR). "
-        "Limite de upload: **até ~1 GB por ZIP** (ficheiros individuais até 200 MB). "
-        "Fotos: OCR local ou via IA Groq. "
-        "Textos muito longos são resumidos para a IA (limites da API)."
+        "Em cada capítulo/domínio pode carregar **vários ficheiros**: PDF, Excel (.xlsx), "
+        "Word, fotos (OCR), TXT e ZIP. "
+        "Limite ~1 GB por envio. Tudo é tido em conta na autoavaliação automática (com API Groq)."
     )
 
     api_key_docs = st.text_input(
@@ -1143,10 +1187,11 @@ No fim **confirma ou altera** manualmente em cada indicador.
     if api_key_docs:
         st.session_state.api_key = api_key_docs
 
-    st.subheader("1. Carregar ZIPs de documentação")
+    st.subheader("1. Carregar documentação")
     st.caption(
-        "Pode carregar um ZIP geral, por domínio e/ou por capítulo. "
-        "Na avaliação, a IA junta a documentação geral + do domínio + dos capítulos desse domínio."
+        "Pode enviar **ZIP** ou ficheiros soltos: **PDF, Excel, Word, fotos, TXT**. "
+        "Vários ficheiros por capítulo/domínio. "
+        "Na avaliação, a IA junta geral + domínio + capítulos desse domínio."
     )
 
     # --- Geral + Domínios ---
@@ -1162,15 +1207,15 @@ No fim **confirma ou altera** manualmente em cada indicador.
     for i, (key, label) in domain_upload_labels.items():
         with cols[i]:
             up = st.file_uploader(
-                f"ZIP {label}",
-                type=["zip"],
+                f"{label}",
+                type=ALLOWED_UPLOAD_TYPES,
                 key=f"zip_{key}",
-                help="Até cerca de 1 GB por ZIP",
+                accept_multiple_files=True,
+                help="ZIP e/ou PDF, Excel, fotos, Word…",
             )
-            if up is not None:
-                raw = up.read()
-                with st.spinner(f"A extrair {label}…"):
-                    combined, names, images = extract_from_zip(raw)
+            if up:
+                with st.spinner(f"A processar {label}…"):
+                    combined, names, images = process_uploaded_files(up)
                 sk = str(key)
                 st.session_state.docs_text[sk] = combined
                 st.session_state.docs_files[sk] = names
@@ -1180,11 +1225,13 @@ No fim **confirma ou altera** manualmente em cada indicador.
 
     # --- Por capítulo ---
     st.markdown("##### Por capítulo")
-    st.caption("Abra o domínio e carregue o ZIP do capítulo correspondente (ex.: 2.3 Gestão de Pragas).")
+    st.caption(
+        "Em cada capítulo pode adicionar **vários** PDF, Excel, fotos ou um ZIP — "
+        "tudo é lido e usado na autoavaliação automática."
+    )
     for d in range(1, 5):
         with st.expander(f"Domínio {d}: {DOMAIN_NAMES[d]} — capítulos", expanded=False):
             chapters = DATA[d]["chapters"]
-            # 2 colunas de uploaders
             for ci in range(0, len(chapters), 2):
                 ccols = st.columns(2)
                 for j, col in enumerate(ccols):
@@ -1194,15 +1241,15 @@ No fim **confirma ou altera** manualmente em cada indicador.
                     ch_key = f"ch_{ch['id']}"
                     with col:
                         up = st.file_uploader(
-                            f"ZIP {ch['id']} – {ch['title'][:40]}",
-                            type=["zip"],
+                            f"{ch['id']} – {ch['title'][:42]}",
+                            type=ALLOWED_UPLOAD_TYPES,
                             key=f"zip_{ch_key}",
-                            help=f"Documentação do capítulo {ch['id']}",
+                            accept_multiple_files=True,
+                            help="PDF, Excel, fotos, Word, ZIP… (vários ficheiros)",
                         )
-                        if up is not None:
-                            raw = up.read()
-                            with st.spinner(f"A extrair {ch['id']}…"):
-                                combined, names, images = extract_from_zip(raw)
+                        if up:
+                            with st.spinner(f"A processar {ch['id']}…"):
+                                combined, names, images = process_uploaded_files(up)
                             st.session_state.docs_text[ch_key] = combined
                             st.session_state.docs_files[ch_key] = names
                             st.session_state.docs_images[ch_key] = images
