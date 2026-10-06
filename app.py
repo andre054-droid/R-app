@@ -31,6 +31,38 @@ try:
 except ImportError:
     HAS_PDF = False
 
+import zipfile
+import tempfile
+import re
+
+try:
+    from pypdf import PdfReader
+    HAS_PYPDF = True
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader
+        HAS_PYPDF = True
+    except ImportError:
+        HAS_PYPDF = False
+
+try:
+    import docx as python_docx
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+try:
+    import pytesseract
+    HAS_TESSERACT = True
+except ImportError:
+    HAS_TESSERACT = False
+
 # ---------------------------------------------------------------------------
 # Configuração da página
 # ---------------------------------------------------------------------------
@@ -80,6 +112,10 @@ def init_state():
         "ncs": [],          # list of dicts
         "api_key": "",
         "chat_history": [],
+        "docs_text": {},    # domain_id (str) or "all" -> extracted text
+        "docs_files": {},   # domain_id -> list of file names
+        "docs_images": {},  # domain_id -> list of {name, data}
+        "auto_suggestions": {},  # ind_id -> {level, evidence, reasoning}
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -523,6 +559,297 @@ def build_pdf() -> bytes:
     return buf.getvalue()
 
 
+
+def extract_text_from_bytes(name: str, data: bytes) -> str:
+    """Extrai texto de PDF, DOCX, TXT, Excel e tenta OCR em imagens."""
+    lower = name.lower()
+    try:
+        if lower.endswith((".txt", ".md", ".csv", ".log")):
+            for enc in ("utf-8", "latin-1", "cp1252"):
+                try:
+                    return data.decode(enc)
+                except UnicodeDecodeError:
+                    continue
+            return data.decode("utf-8", errors="ignore")
+
+        if lower.endswith(".pdf") and HAS_PYPDF:
+            from io import BytesIO
+            reader = PdfReader(BytesIO(data))
+            parts = []
+            for page in reader.pages[:50]:
+                try:
+                    parts.append(page.extract_text() or "")
+                except Exception:
+                    pass
+            return "\n".join(parts)
+
+        if lower.endswith(".docx") and HAS_DOCX:
+            from io import BytesIO
+            document = python_docx.Document(BytesIO(data))
+            paras = [p.text for p in document.paragraphs if p.text.strip()]
+            # tabelas
+            for table in document.tables:
+                for row in table.rows:
+                    paras.append(" | ".join(c.text.strip() for c in row.cells))
+            return "\n".join(paras)
+
+        if lower.endswith(".doc"):
+            return f"[Ficheiro .doc antigo: {name}. Converta para .docx ou PDF.]"
+
+        # Excel
+        if lower.endswith((".xlsx", ".xlsm")) and HAS_XLSX:
+            from io import BytesIO
+            wb = openpyxl.load_workbook(BytesIO(data), data_only=True, read_only=True)
+            parts = []
+            for sheet in wb.worksheets:
+                parts.append(f"--- Folha: {sheet.title} ---")
+                for i, row in enumerate(sheet.iter_rows(values_only=True)):
+                    if i > 500:
+                        parts.append("[... linhas adicionais omitidas ...]")
+                        break
+                    vals = [str(c) if c is not None else "" for c in row]
+                    if any(v.strip() for v in vals):
+                        parts.append(" | ".join(vals))
+            wb.close()
+            return "\n".join(parts)
+
+        if lower.endswith(".xls"):
+            return f"[Excel .xls antigo: {name}. Guarde como .xlsx para leitura completa.]"
+
+        # Imagens — OCR local se possível; senão marca para OCR via IA
+        if lower.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp")):
+            ocr_text = ""
+            if HAS_PIL and HAS_TESSERACT:
+                try:
+                    from io import BytesIO
+                    img = Image.open(BytesIO(data))
+                    ocr_text = pytesseract.image_to_string(img, lang="por+eng") or ""
+                except Exception as e:
+                    ocr_text = f"[OCR local falhou: {e}]"
+            if ocr_text.strip() and not ocr_text.startswith("[OCR"):
+                return f"[OCR imagem {name}]\n{ocr_text}"
+            return f"[IMAGEM_PENDENTE_OCR:{name}]"
+
+    except Exception as e:
+        return f"[Erro a ler {name}: {e}]"
+    return f"[Tipo de ficheiro não processado: {name}]"
+
+
+def extract_from_zip(zip_bytes: bytes) -> tuple:
+    """Devolve (texto_agregado, lista_nomes, lista_imagens).
+    lista_imagens = [{name, data}, ...] para OCR via IA se necessário.
+    """
+    texts = []
+    names = []
+    images = []
+    with tempfile.TemporaryDirectory() as tmp:
+        zpath = Path(tmp) / "upload.zip"
+        zpath.write_bytes(zip_bytes)
+        with zipfile.ZipFile(zpath, "r") as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+                fname = info.filename
+                if "__MACOSX" in fname or fname.endswith(".DS_Store"):
+                    continue
+                base = Path(fname).name
+                if base.startswith("."):
+                    continue
+                try:
+                    data = zf.read(info)
+                except Exception:
+                    continue
+                if len(data) > 25 * 1024 * 1024:  # 25 MB por ficheiro
+                    names.append(fname + " [ficheiro demasiado grande, ignorado]")
+                    continue
+                names.append(fname)
+                lower = base.lower()
+                if lower.endswith((".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp")):
+                    images.append({"name": fname, "data": data})
+                chunk = extract_text_from_bytes(base, data)
+                if chunk.strip():
+                    texts.append(f"\n\n===== FICHEIRO: {fname} =====\n{chunk[:20000]}")
+    combined = "\n".join(texts)
+    if len(combined) > 150000:
+        combined = combined[:150000] + "\n\n[... texto truncado por tamanho ...]"
+    return combined, names, images
+
+
+def ocr_images_with_groq(images: list, api_key: str, max_images: int = 15) -> str:
+    """Usa modelo de visão da Groq para extrair texto/descrição de fotos."""
+    if not images or not api_key:
+        return ""
+    try:
+        from openai import OpenAI
+        import base64
+    except ImportError:
+        return ""
+
+    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+    parts = []
+    for img in images[:max_images]:
+        name = img["name"]
+        data = img["data"]
+        lower = name.lower()
+        mime = "image/jpeg"
+        if lower.endswith(".png"):
+            mime = "image/png"
+        elif lower.endswith(".webp"):
+            mime = "image/webp"
+        elif lower.endswith(".gif"):
+            mime = "image/gif"
+        b64 = base64.b64encode(data).decode("ascii")
+        # limitar tamanho — se muito grande, saltar
+        if len(b64) > 4_000_000:
+            parts.append(f"[Imagem demasiado grande para OCR: {name}]")
+            continue
+        try:
+            resp = client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "És um assistente de auditoria de sustentabilidade vitivinícola. "
+                                "Extrai TODO o texto visível nesta imagem (documentos, certificados, "
+                                "rótulos, tabelas, atas, registos). Se for foto de campo/instalação, "
+                                "descreve de forma objetiva o que mostra de relevante para evidências. "
+                                "Responde em português."
+                            ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64}"},
+                        },
+                    ],
+                }],
+                temperature=0.1,
+                max_tokens=1200,
+            )
+            content = resp.choices[0].message.content or ""
+            parts.append(f"\n\n===== OCR IMAGEM: {name} =====\n{content}")
+        except Exception as e:
+            # fallback: tentar modelo alternativo ou registar erro
+            parts.append(f"[OCR IA falhou para {name}: {e}]")
+    return "\n".join(parts)
+
+
+def auto_evaluate_domain(domain_id: int, api_key: str, docs_text: str) -> dict:
+    """
+    Pede à IA sugestões de nível + justificação para os indicadores visíveis do domínio.
+    Devolve {ind_id: {level, evidence, reasoning}}.
+    """
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return {"__error__": "Instale o pacote openai."}
+
+    inds = []
+    for ch in DATA[domain_id]["chapters"]:
+        for ind in ch["indicators"]:
+            if not is_visible(ind):
+                continue
+            inds.append(ind)
+
+    if not inds:
+        return {}
+
+    # Processar em lotes de 8 indicadores para caber no contexto
+    client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+    results = {}
+    batch_size = 8
+    docs_snippet = docs_text[:50000] if docs_text else "(Sem documentação carregada para este domínio.)"
+
+    for i in range(0, len(inds), batch_size):
+        batch = inds[i:i + batch_size]
+        ind_list = "\\n".join(
+            f"- {ind['id']} | {'KO' if ind['ko'] else 'opcional'} | {ind['title']}"
+            for ind in batch
+        )
+        prompt = f"""És auditor de sustentabilidade vitivinícola (RNCSSV / VINIP03).
+Com base na DOCUMENTAÇÃO abaixo, sugere para cada indicador:
+- level: 0, 1, 2 ou 3 (ou null se impossível avaliar)
+- na: true só se for claramente não aplicável à atividade
+- evidence: frase curta com a origem/evidência encontrada na documentação (ou o que falta)
+- reasoning: 1-2 frases a justificar o nível
+
+Critérios de nível:
+0 = sem evidências / não cumpre
+1 = evidências básicas + cumprimento legal mínimo
+2 = plano/procedimento documentado + objetivos + monitorização
+3 = indicadores de desempenho + revisão + melhoria contínua
+
+Responde APENAS com um JSON array, sem markdown, no formato:
+[{{"id":"1.1.1","level":1,"na":false,"evidence":"...","reasoning":"..."}}, ...]
+
+INDICADORES A AVALIAR:
+{ind_list}
+
+DOCUMENTAÇÃO:
+{docs_snippet}
+"""
+        try:
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=2500,
+            )
+            raw = resp.choices[0].message.content.strip()
+            # limpar possíveis fences
+            raw = re.sub(r"^```(?:json)?\\s*", "", raw)
+            raw = re.sub(r"\\s*```$", "", raw)
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                for item in arr:
+                    iid = str(item.get("id", "")).strip()
+                    if not iid:
+                        continue
+                    results[iid] = {
+                        "level": item.get("level"),
+                        "na": bool(item.get("na")),
+                        "evidence": (item.get("evidence") or item.get("reasoning") or "")[:800],
+                        "reasoning": (item.get("reasoning") or "")[:500],
+                    }
+        except Exception as e:
+            results["__error__"] = f"Erro no lote {i // batch_size + 1}: {e}"
+            break
+
+    return results
+
+
+def apply_suggestions(suggestions: dict, only_empty: bool = True):
+    """Aplica sugestões da IA às answers (confirmação do utilizador)."""
+    for iid, sug in suggestions.items():
+        if iid.startswith("__"):
+            continue
+        cur = get_answer(iid)
+        if only_empty and (cur.get("level") is not None or cur.get("na") or (cur.get("evidence") or "").strip()):
+            continue
+        level = sug.get("level")
+        na = bool(sug.get("na"))
+        if na:
+            set_answer(iid, na=True, level=None, evidence=sug.get("evidence") or cur.get("evidence") or "")
+        elif level is not None:
+            try:
+                level = int(level)
+            except (TypeError, ValueError):
+                continue
+            if level < 0 or level > 3:
+                continue
+            evid = sug.get("evidence") or ""
+            reason = sug.get("reasoning") or ""
+            text_ev = evid
+            if reason and reason not in evid:
+                text_ev = f"{evid}\\n[IA: {reason}]".strip()
+            set_answer(iid, na=False, level=level, evidence=text_ev[:2000])
+
+
 def ask_groq(question: str, api_key: str) -> str:
     """Chama a API Groq (compatível OpenAI)."""
     try:
@@ -642,7 +969,7 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 # Tabs principais
 # ---------------------------------------------------------------------------
-tab_labels = [f"{d}. {DOMAIN_NAMES[d]}" for d in range(1, 5)] + ["OM / NC", "🤖 Ajuda IA"]
+tab_labels = [f"{d}. {DOMAIN_NAMES[d]}" for d in range(1, 5)] + ["OM / NC", "📁 Docs + Autoavaliação", "🤖 Ajuda IA"]
 tabs = st.tabs(tab_labels)
 
 # ---- Domínios 1-4 ----
@@ -778,8 +1105,166 @@ with tabs[4]:
                         st.rerun()
                 st.divider()
 
-# ---- IA ----
+# ---- Docs + Autoavaliação ----
 with tabs[5]:
+    st.header("📁 Documentação e Autoavaliação automática")
+    st.markdown(
+        """
+Carregue **pastas ZIP** com a documentação de cada domínio (ou um ZIP geral).
+A IA lê o texto dos ficheiros (PDF, DOCX, TXT, etc.), sugere **níveis** e **justificações**.
+No fim **confirma ou altera** manualmente em cada indicador.
+"""
+    )
+    st.info(
+        "Formatos lidos: PDF, DOCX, TXT, MD, CSV, **Excel (.xlsx)** e **fotos** (OCR). "
+        "Fotos: OCR local (se disponível) ou via IA Groq na avaliação. "
+        "A documentação/imagens são enviadas à API Groq só durante a autoavaliação."
+    )
+
+    api_key_docs = st.text_input(
+        "API Key Groq (necessária para autoavaliação)",
+        value=st.session_state.api_key,
+        type="password",
+        key="api_key_docs",
+        placeholder="gsk_...",
+    )
+    if api_key_docs:
+        st.session_state.api_key = api_key_docs
+
+    st.subheader("1. Carregar ZIPs de documentação")
+    cols = st.columns(5)
+    domain_upload_labels = {
+        0: ("all", "Geral (todos)"),
+        1: (1, "1. Gestão"),
+        2: (2, "2. Ambiental"),
+        3: (3, "3. Social"),
+        4: (4, "4. Económico"),
+    }
+    for i, (key, label) in domain_upload_labels.items():
+        with cols[i]:
+            up = st.file_uploader(f"ZIP {label}", type=["zip"], key=f"zip_{key}")
+            if up is not None:
+                raw = up.read()
+                with st.spinner(f"A extrair {label}…"):
+                    combined, names, images = extract_from_zip(raw)
+                sk = str(key)
+                st.session_state.docs_text[sk] = combined
+                st.session_state.docs_files[sk] = names
+                st.session_state.docs_images[sk] = images
+                img_msg = f" · {len(images)} imagens" if images else ""
+                st.success(f"{len(names)} ficheiros · {len(combined):,} caracteres{img_msg}")
+
+    # Resumo do que está carregado
+    if st.session_state.docs_text:
+        st.subheader("Documentação carregada")
+        for sk, txt in st.session_state.docs_text.items():
+            label = domain_upload_labels.get(
+                int(sk) if sk.isdigit() else 0, (sk, sk)
+            )[1] if sk != "all" else "Geral (todos)"
+            if sk == "all":
+                label = "Geral (todos)"
+            elif sk.isdigit():
+                label = f"{sk}. {DOMAIN_NAMES.get(int(sk), '')}"
+            files = st.session_state.docs_files.get(sk, [])
+            with st.expander(f"{label} — {len(files)} ficheiros, {len(txt):,} caracteres"):
+                st.caption(", ".join(files[:30]) + ("…" if len(files) > 30 else ""))
+                st.text_area("Pré-visualização", txt[:3000], height=120, disabled=True, key=f"prev_{sk}")
+
+        if st.button("🗑 Limpar documentação carregada"):
+            st.session_state.docs_text = {}
+            st.session_state.docs_files = {}
+            st.session_state.docs_images = {}
+            st.session_state.auto_suggestions = {}
+            st.rerun()
+
+    st.subheader("2. Correr autoavaliação com IA")
+    only_empty = st.checkbox("Preencher só indicadores ainda vazios", value=True)
+    domains_to_run = st.multiselect(
+        "Domínios a avaliar",
+        options=[1, 2, 3, 4],
+        default=[1, 2, 3, 4],
+        format_func=lambda d: f"{d}. {DOMAIN_NAMES[d]}",
+    )
+
+    if st.button("🚀 Avaliar automaticamente", type="primary", use_container_width=True):
+        if not (st.session_state.api_key or "").strip():
+            st.error("Indique a API Key Groq.")
+        elif not st.session_state.docs_text:
+            st.error("Carregue pelo menos um ZIP de documentação.")
+        elif not domains_to_run:
+            st.error("Selecione pelo menos um domínio.")
+        else:
+            all_sug = dict(st.session_state.auto_suggestions)
+            progress = st.progress(0)
+            status = st.empty()
+            n = len(domains_to_run)
+            for idx_d, d in enumerate(domains_to_run):
+                status.write(f"A avaliar domínio {d}. {DOMAIN_NAMES[d]}…")
+                # juntar texto geral + do domínio
+                parts = []
+                if "all" in st.session_state.docs_text:
+                    parts.append(st.session_state.docs_text["all"])
+                if str(d) in st.session_state.docs_text:
+                    parts.append(st.session_state.docs_text[str(d)])
+                # OCR de imagens (IA) se ainda não estiver no texto
+                imgs = []
+                if "all" in st.session_state.docs_images:
+                    imgs.extend(st.session_state.docs_images["all"])
+                if str(d) in st.session_state.docs_images:
+                    imgs.extend(st.session_state.docs_images[str(d)])
+                # só imagens ainda pendentes (sem OCR local bem-sucedido)
+                pending = [im for im in imgs if im.get("name")]
+                if pending and st.session_state.api_key:
+                    status.write(f"OCR de {min(len(pending), 15)} imagens (domínio {d})…")
+                    ocr_extra = ocr_images_with_groq(pending, st.session_state.api_key.strip())
+                    if ocr_extra:
+                        parts.append(ocr_extra)
+                docs = "\n\n".join(parts) if parts else ""
+                if not docs.strip():
+                    st.warning(f"Sem documentação específica para o domínio {d} (a usar texto geral se existir).")
+                sug = auto_evaluate_domain(d, st.session_state.api_key.strip(), docs)
+                if "__error__" in sug:
+                    st.error(sug["__error__"])
+                for k, v in sug.items():
+                    if not k.startswith("__"):
+                        all_sug[k] = v
+                progress.progress((idx_d + 1) / n)
+            st.session_state.auto_suggestions = all_sug
+            status.write("Concluído. Reveja as sugestões abaixo e aplique.")
+            st.success(f"Sugestões geradas para {len([k for k in all_sug if not k.startswith('__')])} indicadores.")
+
+    if st.session_state.auto_suggestions:
+        st.subheader("3. Rever sugestões e confirmar")
+        sug = {k: v for k, v in st.session_state.auto_suggestions.items() if not k.startswith("__")}
+        # tabela resumo
+        rows = []
+        for iid, s in sorted(sug.items()):
+            rows.append({
+                "Indicador": iid,
+                "Nível sugerido": "N/A" if s.get("na") else s.get("level"),
+                "Justificação": (s.get("reasoning") or s.get("evidence") or "")[:200],
+            })
+        if rows:
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("✅ Aplicar sugestões aos indicadores", type="primary", use_container_width=True):
+                apply_suggestions(st.session_state.auto_suggestions, only_empty=only_empty)
+                st.success("Sugestões aplicadas. Vá aos separadores dos domínios para confirmar ou ajustar.")
+                st.rerun()
+        with c2:
+            if st.button("🗑 Descartar sugestões", use_container_width=True):
+                st.session_state.auto_suggestions = {}
+                st.rerun()
+
+        st.caption(
+            "Depois de aplicar, percorra os separadores 1–4, valide cada nível e edite as evidências se necessário. "
+            "No fim exporte Excel/PDF."
+        )
+
+# ---- IA ----
+with tabs[6]:
     st.header("🤖 Assistente de Ajuda (IA)")
     st.markdown(
         """
