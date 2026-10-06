@@ -803,7 +803,7 @@ def _ocr_images_gemini(images: list, api_key: str, max_images: int = 40) -> str:
     except ImportError:
         return "[Instale google-generativeai para OCR com Gemini]"
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     parts = []
     prompt = (
         "És um assistente de auditoria de sustentabilidade vitivinícola. "
@@ -1089,7 +1089,7 @@ def _ask_gemini(question: str, api_key: str, system: str) -> str:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
+            model_name="gemini-2.5-flash",
             system_instruction=system,
         )
         resp = model.generate_content(
@@ -1108,7 +1108,7 @@ def _llm_json_array(prompt: str, api_key: str, provider: str = None) -> list:
     if provider == "gemini":
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         resp = model.generate_content(
             "Responde APENAS com um JSON array válido, sem markdown.\n\n" + prompt,
             generation_config={"temperature": 0.1, "max_output_tokens": 2500},
@@ -1179,6 +1179,17 @@ with st.sidebar:
         st.success("✓ Todos os KO cumpridos (ou N/A)")
 
     st.divider()
+    
+    st.divider()
+    st.subheader("💬 Chatbots Externos (Chatling / FastBots)")
+    chat_widget_provider = st.selectbox("Widget Externo", ["Nenhum", "Chatling.ai", "FastBots.ai"])
+    if chat_widget_provider != "Nenhum":
+        embed_code = st.text_area(f"Cole o código Embed/Iframe do {chat_widget_provider}", placeholder="<iframe src='...' width='100%' height='400'></iframe>")
+        if embed_code:
+            st.markdown("### Widget Ativo:")
+            import streamlit.components.v1 as components
+            components.html(embed_code, height=400, scrolling=True)
+
     st.subheader("Exportar relatório")
     org_slug = (st.session_state.org_name or "autoavaliacao").replace(" ", "_")[:30]
 
