@@ -1061,16 +1061,25 @@ def _ask_groq_chat(question: str, api_key: str, system: str) -> str:
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": question},
-            ],
-            temperature=0.3,
-            max_tokens=1500,
-        )
-        return resp.choices[0].message.content
+        last_err = None
+        for model in ("llama-3.1-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"):
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": question},
+                    ],
+                    temperature=0.3,
+                    max_tokens=1500,
+                )
+                return resp.choices[0].message.content
+            except Exception as e:
+                last_err = e
+                if "model_not_found" not in str(e).lower() and "does not exist" not in str(e).lower():
+                    return f"Erro na API Groq: {e}"
+                continue
+        return f"Erro na API Groq (nenhum modelo disponível): {last_err}"
     except Exception as e:
         return f"Erro na API Groq: {e}"
 
@@ -1108,16 +1117,28 @@ def _llm_json_array(prompt: str, api_key: str, provider: str = None) -> list:
     else:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-        resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.1,
-            max_tokens=2500,
-        )
-        raw = resp.choices[0].message.content.strip()
+        raw = ""
+        last_err = None
+        for model in ("llama-3.1-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"):
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": "Responde apenas com JSON válido (array). Sem texto extra."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=2500,
+                )
+                raw = resp.choices[0].message.content.strip()
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                if "model_not_found" not in str(e).lower() and "does not exist" not in str(e).lower():
+                    raise
+        if last_err and not raw:
+            raise last_err
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     if not raw.startswith("["):
